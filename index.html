@@ -3,30 +3,34 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>我的音乐库</title>
+    <title>Musiclib</title>
 </head>
 
 <body>
 
-    <h1>我的音乐库</h1>
+    <h1>Musiclib</h1>
 
     <div>
-        <p id="current-track">请选择歌曲</p>
+        <p id="current-track">Music List</p>
         <audio id="audio-player" controls></audio>
-        <p><a id="download-link" href="#" target="_blank" style="display: none;">直链下载</a></p>
+        <p>
+            <button id="copy-link-btn" style="display: none;">Copy Link</button>
+            <span id="copy-status" style="margin-left: 10px; color: green;"></span>
+        </p>
     </div>
 
     <hr>
 
     <ul id="playlist">
-        <li>正在读取音频文件...</li>
+        <li>Loading files...</li>
     </ul>
 
     <script>
         const playlistElement = document.getElementById('playlist');
         const audioPlayer = document.getElementById('audio-player');
         const currentTrackDiv = document.getElementById('current-track');
-        const downloadLink = document.getElementById('download-link');
+        const copyLinkBtn = document.getElementById('copy-link-btn');
+        const copyStatus = document.getElementById('copy-status');
 
         const allowedExtensions = ['.mp3', '.ogg', '.flac'];
 
@@ -39,10 +43,13 @@
         // 2. 请求当前仓库根目录的文件列表
         const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents`;
 
+        // 临时存储当前播放歌曲的完整直链
+        let currentAbsoluteUrl = "";
+
         async function fetchMusic() {
             try {
                 const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error('读取失败，请确保仓库已公开');
+                if (!response.ok) throw new Error('Failed to read files, please ensure the repository is public and Pages is enabled');
                 const files = await response.json();
 
                 // 过滤出音频文件
@@ -53,7 +60,7 @@
                 });
 
                 if (audioFiles.length === 0) {
-                    playlistElement.innerHTML = '<li>未找到音频文件</li>';
+                    playlistElement.innerHTML = '<li>No audio files found</li>';
                     return;
                 }
 
@@ -65,19 +72,24 @@
                     a.href = "#";
                     a.textContent = track.name;
 
-                    // 核心：直接使用 Pages 相对路径（即 "./文件名"）
+                    // 核心：使用 Pages 的相对路径
                     const relativeUrl = `./${encodeURIComponent(track.name)}`;
 
                     a.addEventListener('click', (e) => {
                         e.preventDefault();
 
-                        // 播放器直接加载 Pages 原生相对路径
+                        // 播放器加载相对路径
                         audioPlayer.src = relativeUrl;
                         audioPlayer.play();
 
-                        currentTrackDiv.innerHTML = `正在播放: <strong>${track.name}</strong>`;
-                        downloadLink.href = relativeUrl;
-                        downloadLink.style.display = 'inline';
+                        currentTrackDiv.innerHTML = `Playing: <strong>${track.name}</strong>`;
+
+                        // 核心修改：利用 URL 对象将相对路径转换为绝对直链地址
+                        currentAbsoluteUrl = new URL(relativeUrl, window.location.href).href;
+
+                        // 显示复制按钮并重置提示文字
+                        copyLinkBtn.style.display = 'inline';
+                        copyStatus.textContent = '';
                     });
 
                     li.appendChild(a);
@@ -85,9 +97,26 @@
                 });
 
             } catch (error) {
-                playlistElement.innerHTML = `<li style="color: red;">错误: ${error.message}</li>`;
+                playlistElement.innerHTML = `<li style="color: red;">Error: ${error.message}</li>`;
             }
         }
+
+        // 4. 复制到剪贴板的逻辑
+        copyLinkBtn.addEventListener('click', () => {
+            if (!currentAbsoluteUrl) return;
+
+            // 使用现代浏览器标准的 Clipboard API 复制文本
+            navigator.clipboard.writeText(currentAbsoluteUrl).then(() => {
+                copyStatus.textContent = "Copied!";
+                // 2秒后自动清除提示
+                setTimeout(() => {
+                    copyStatus.textContent = "";
+                }, 2000);
+            }).catch(err => {
+                console.error('复制失败: ', err);
+                copyStatus.textContent = "Failed to copy, please copy manually";
+            });
+        });
 
         fetchMusic();
     </script>
