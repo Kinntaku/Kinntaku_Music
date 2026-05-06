@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>我的音乐库</title>
+</head>
+
+<body>
+
+    <h1>我的音乐库</h1>
+
+    <div>
+        <p id="current-track">请选择歌曲</p>
+        <audio id="audio-player" controls></audio>
+        <p><a id="download-link" href="#" target="_blank" style="display: none;">直链下载</a></p>
+    </div>
+
+    <hr>
+
+    <ul id="playlist">
+        <li>正在读取音频文件...</li>
+    </ul>
+
+    <script>
+        const playlistElement = document.getElementById('playlist');
+        const audioPlayer = document.getElementById('audio-player');
+        const currentTrackDiv = document.getElementById('current-track');
+        const downloadLink = document.getElementById('download-link');
+
+        const allowedExtensions = ['.mp3', '.ogg', '.flac'];
+
+        // 1. 自动解析当前 Pages 所在的用户名和仓库名
+        const host = window.location.host;
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        const user = host.split('.')[0];
+        const repo = pathSegments[0] || '';
+
+        // 2. 请求当前仓库根目录的文件列表
+        const apiUrl = `https://api.github.com/repos/${user}/${repo}/contents`;
+
+        async function fetchMusic() {
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error('读取失败，请确保仓库已公开');
+                const files = await response.json();
+
+                // 过滤出音频文件
+                const audioFiles = files.filter(file => {
+                    if (file.type !== 'file') return false;
+                    const nameLower = file.name.toLowerCase();
+                    return allowedExtensions.some(ext => nameLower.endsWith(ext));
+                });
+
+                if (audioFiles.length === 0) {
+                    playlistElement.innerHTML = '<li>未找到音频文件</li>';
+                    return;
+                }
+
+                // 3. 生成列表
+                playlistElement.innerHTML = '';
+                audioFiles.forEach(track => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+                    a.href = "#";
+                    a.textContent = track.name;
+
+                    // 核心：直接使用 Pages 相对路径（即 "./文件名"）
+                    const relativeUrl = `./${encodeURIComponent(track.name)}`;
+
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+
+                        // 播放器直接加载 Pages 原生相对路径
+                        audioPlayer.src = relativeUrl;
+                        audioPlayer.play();
+
+                        currentTrackDiv.innerHTML = `正在播放: <strong>${track.name}</strong>`;
+                        downloadLink.href = relativeUrl;
+                        downloadLink.style.display = 'inline';
+                    });
+
+                    li.appendChild(a);
+                    playlistElement.appendChild(li);
+                });
+
+            } catch (error) {
+                playlistElement.innerHTML = `<li style="color: red;">错误: ${error.message}</li>`;
+            }
+        }
+
+        fetchMusic();
+    </script>
+
+</body>
+
+</html>
